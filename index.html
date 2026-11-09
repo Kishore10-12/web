@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c1016">
+<meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Attendance">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Section K Attendance Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: ledger-style tool. Inputs on the left, live results on the right; a second tab holds the register audit table. Dark only, as requested. */
+  --bg:#0c1016;
+  --surface:#131923;
+  --surface-2:#1a2230;
+  --line:#27324a;
+  --fg:#e7ecf5;
+  --muted:#97a3b8;
+  --accent:#8da4ff;
+  --accent-ink:#0c1016;
+  --good:#4fd8a8;
+  --bad:#ff8080;
+  --warn:#f3c65a;
+  --good-bg:rgba(79,216,168,.11);
+  --bad-bg:rgba(255,128,128,.11);
+  --warn-bg:rgba(243,198,90,.12);
+  --font-ui:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-num:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--fg);
+  font:15px/1.5 var(--font-ui);
+  padding-block:20px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
+h1{font-size:1.6rem;letter-spacing:-.01em}
+h2{font-size:1.05rem}
+h3{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+p{margin:0}
+.muted{color:var(--muted)}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* header + tabs */
+.top{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 24px}
+.top p{max-width:60ch;margin-top:4px}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs a{color:var(--muted);text-decoration:none;padding:8px 14px;border-radius:7px;font-weight:500;font-size:.9rem}
+.tabs a[aria-current="page"]{background:var(--accent);color:var(--accent-ink)}
+.tabs a:not([aria-current="page"]):hover{color:var(--fg)}
+
+/* panels */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.calc-grid{display:grid;grid-template-columns:minmax(280px,350px) minmax(0,1fr);gap:20px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:20px;min-width:0}
+@media (max-width:860px){.calc-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* form */
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field.full{grid-column:1/-1}
+.field label{font-size:.82rem;color:var(--muted)}
+input[type=number],select{
+  width:100%;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);
+  border-radius:8px;padding:10px 12px;font:500 1rem var(--font-num);
+}
+select{font-family:var(--font-ui);font-weight:400;font-size:.95rem}
+input[type=number]:focus,select:focus{border-color:var(--accent)}
+.check{display:flex;align-items:center;gap:10px;font-size:.92rem;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+.hint{font-size:.8rem;color:var(--muted)}
+.tag{display:inline-block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);padding:2px 8px;border-radius:99px}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px}
+.seg button{font:500 .85rem var(--font-ui);color:var(--muted);background:none;border:0;padding:6px 12px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:not([aria-pressed="true"]):hover{color:var(--fg)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end}
+.big{font:500 3.6rem/1 var(--font-num);letter-spacing:-.03em}
+.big small{font-size:1.5rem;color:var(--muted);margin-left:2px}
+.mid{font:500 1.9rem/1 var(--font-num)}
+.mid small{font-size:1rem;color:var(--muted)}
+.label{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.sheetbox{text-align:right}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:.82rem;font-weight:500;margin-top:8px}
+.pill.good{color:var(--good);background:var(--good-bg)}
+.pill.bad{color:var(--bad);background:var(--bad-bg)}
+.pill.warn{color:var(--warn);background:var(--warn-bg)}
+.meter{position:relative;height:10px;background:var(--surface-2);border-radius:99px;margin-top:6px}
+.meter i{position:absolute;inset:0 auto 0 0;border-radius:99px;background:var(--accent)}
+.meter b{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--fg)}
+.meter-scale{display:flex;justify-content:space-between;font:.72rem var(--font-num);color:var(--muted);margin-top:6px}
+
+/* impact tiles */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:520px){.tiles{grid-template-columns:minmax(0,1fr)}.hero{grid-template-columns:minmax(0,1fr)}.sheetbox{text-align:left}.big{font-size:3rem}}
+.tile{border-radius:10px;padding:14px;border:1px solid var(--line);display:flex;flex-direction:column;gap:4px;background:var(--surface-2)}
+.tile.good{border-color:rgba(79,216,168,.35)}
+.tile.bad{border-color:rgba(255,128,128,.35)}
+.tile .k{font-size:.85rem;color:var(--muted)}
+.tile .d{font:500 1.7rem/1.1 var(--font-num)}
+.tile.good .d{color:var(--good)}
+.tile.bad .d{color:var(--bad)}
+.tile .r{font-size:.85rem;color:var(--muted)}
+.tile .r .num{color:var(--fg)}
+
+/* planner */
+.plan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:520px){.plan{grid-template-columns:minmax(0,1fr)}}
+.plan .box{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.plan .v{font:500 1.35rem/1.2 var(--font-num)}
+.plan .s{font-size:.85rem;color:var(--muted)}
+
+/* tables */
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+#view-audit th:nth-child(2){text-align:left}
+@media (min-width:861px){.calc-grid>.panel{position:sticky;top:16px}}
+th{font-weight:500;color:var(--muted);font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td.up{color:var(--good)} td.down{color:var(--bad)}
+tr.now td{background:rgba(141,164,255,.07)}
+th button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+th button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+td.name{text-align:left;white-space:normal;min-width:170px}
+.ok{color:var(--good)} .no{color:var(--bad)} .na{color:var(--warn)}
+.chip{font-size:.72rem;padding:1px 7px;border-radius:99px;background:var(--warn-bg);color:var(--warn);margin-left:6px;white-space:nowrap}
+.btn{font:500 .85rem var(--font-ui);color:var(--accent);background:none;border:1px solid var(--line);border-radius:7px;padding:5px 10px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.row-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.notice{padding:14px;border-radius:10px;background:var(--warn-bg);color:var(--warn)}
+.match-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.match-row:last-child{border-bottom:0}
+.verdict{padding:12px 14px;border-radius:10px;font-weight:500}
+.verdict.good{background:var(--good-bg);color:var(--good)}
+.verdict.bad{background:var(--bad-bg);color:var(--bad)}
+.verdict.neutral{background:var(--surface-2);color:var(--muted);font-weight:400}
+
+/* audit */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.stat{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px}
+.stat .v{font:500 1.6rem/1.2 var(--font-num)}
+.findings{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:10px}
+.findings li{max-width:75ch}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px}
+.toolbar input[type=search]{flex:1 1 200px;min-width:0;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:.95rem var(--font-ui)}
+.toolbar select{width:auto}
+[hidden]{display:none!important}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.picker{display:inline-block}
+.picker:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.fileinput{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.thumbs{display:flex;flex-wrap:wrap;gap:10px}
+.thumb{width:132px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.thumb .pic{height:112px;display:grid;place-items:center;overflow:hidden}
+.thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.thumb .tb{display:flex;justify-content:space-between;padding:4px 6px;border-top:1px solid var(--line)}
+.thumb .tb button{all:unset;cursor:pointer;padding:2px 8px;color:var(--muted);border-radius:5px}
+.thumb .tb button:hover{color:var(--fg)}
+.thumb .tb button:focus-visible{outline:2px solid var(--accent)}
+td input.cell{width:76px;padding:6px 8px;font-size:.9rem}
+td input.cell.namecell{width:200px;font-family:var(--font-ui);font-weight:400}
+input[type=text],input[type=password],textarea{width:100%;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:1rem var(--font-ui)}
+textarea{font:.9rem var(--font-num);resize:vertical}
+input[type=text]:focus,input[type=password]:focus,textarea:focus{border-color:var(--accent)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.mcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.mcards .stat{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mcards ul{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:4px;font-size:.9rem}
+@media (prefers-reduced-motion:no-preference){.meter i{transition:width .25s ease}}
+</style><style>
+html{background:#0c1016}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Section K Attendance Calculator</h1>
+      <p class="muted">BCA, Batch 2024. Works out attendance the way your sheet prints it, shows what each hour and each day does to it, and checks the sheet's own numbers.</p>
+    </div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#calculator" id="tab-calculator">Calculator</a>
+      <a href="#months" id="tab-months">Months</a>
+      <a href="#audit" id="tab-audit">Sheet audit</a>
+    </nav>
+  </header>
+
+  <main id="view-calculator" class="calc-grid">
+    <section class="panel" aria-labelledby="in-h">
+      <div class="row-head"><h2 id="in-h">Your hours</h2><span class="tag" id="example-tag">Example values</span></div>
+      <div class="fields">
+        <div class="field full">
+          <label for="student">Load a student from the sheet</label>
+          <select id="student"></select>
+        </div>
+        <div class="field"><label for="att">Attended hours</label><input id="att" type="number" inputmode="numeric" min="0" step="1" value="30"></div>
+        <div class="field"><label for="con">Conducted hours</label><input id="con" type="number" inputmode="numeric" min="0" step="1" value="64"></div>
+        <div class="field full">
+          <label class="check" for="cum"><input id="cum" type="checkbox"> Add an earlier period (cumulative)</label>
+        </div>
+        <div class="field" data-cum hidden><label for="eatt">Earlier attended</label><input id="eatt" type="number" inputmode="numeric" min="0" step="1" value="15"></div>
+        <div class="field" data-cum hidden><label for="econ">Earlier conducted</label><input id="econ" type="number" inputmode="numeric" min="0" step="1" value="36"></div>
+        <p class="hint full field" data-cum hidden style="grid-column:1/-1">The sheet's cumulative column runs from 17/08 to 30/09: 25 days, so 100 hours. The first 9 days (36 hours) come before the month shown.</p>
+        <div class="field"><label for="hpd">Class hours per day</label><input id="hpd" type="number" inputmode="numeric" min="1" max="24" step="1" value="4"></div>
+        <div class="field"><label for="tgt">Target %</label><input id="tgt" type="number" inputmode="numeric" min="1" max="100" step="1" value="75"></div>
+        <div class="field full">
+          <label for="sheetpct">Percentage printed on your sheet (optional)</label>
+          <input id="sheetpct" type="number" inputmode="numeric" min="0" max="100" step="1" placeholder="e.g. 44">
+        </div>
+        <div class="field full">
+          <span class="hint" id="judge-l">Count the target against</span>
+          <div class="seg" role="group" aria-labelledby="judge-l">
+            <button type="button" id="j-exact" aria-pressed="true">Exact %</button>
+            <button type="button" id="j-round" aria-pressed="false">Sheet's rounded %</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="stack" id="results" aria-live="polite"></div>
+  </main>
+
+  <main id="view-months" class="stack" hidden></main>
+  <main id="view-audit" class="stack" hidden></main>
+</div>
+
+<script>
+// ---------- core maths (integer arithmetic only, so 37.5 never becomes 37.499999) ----------
+// <core>
+const idiv=(n,d)=>(n-(n%d))/d;
+const exactPct=(a,c)=>c>0?100*a/c:0;
+const pctHalfUp=(a,c)=>c>0?idiv(200*a+c,2*c):0;
+const pctFloor=(a,c)=>c>0?idiv(100*a,c):0;
+const pctCeil=(a,c)=>c>0?idiv(100*a+c-1,c):0;
+const pctHalfEven=(a,c)=>{
+  if(c<=0)return 0;
+  const q=idiv(100*a,c), r=(100*a)%c;
+  if(2*r>c)return q+1;
+  if(2*r<c)return q;
+  return q%2===0?q:q+1;
+};
+const METHODS=[
+  ['Round half up (standard)',pctHalfUp],
+  ['Round half to even (banker\'s)',pctHalfEven],
+  ['Round down (floor)',pctFloor],
+  ['Round up (ceiling)',pctCeil]
+];
+// threshold in half-percent units: exact T% -> 2T, "rounded value >= T" -> 2T-1
+const thr2=(T,rounded)=>rounded?2*T-1:2*T;
+const meets=(a,c,T2)=>c>0&&200*a>=T2*c;
+// hours of unbroken attendance needed to reach the threshold (0 if already there, Infinity if impossible)
+const needHours=(a,c,T2)=>{
+  if(meets(a,c,T2))return 0;
+  if(T2>=200)return Infinity;
+  const num=T2*c-200*a, den=200-T2;
+  return idiv(num+den-1,den);
+};
+// most hours that can be missed while staying at or above the threshold (-1 if already below)
+const canMiss=(a,c,T2)=>{
+  if(!meets(a,c,T2))return -1;
+  return idiv(200*a-T2*c,T2);
+};
+// attended counts that would print as `s` out of c under standard rounding
+const countsPrinting=(s,c)=>{const o=[];for(let a=0;a<=c;a++)if(pctHalfUp(a,c)===s)o.push(a);return o;};
+// </core>
+
+// ---------- helpers ----------
+const $=id=>document.getElementById(id);
+const MINUS='−';
+const fx=x=>x.toFixed(2);
+const sgn=x=>{const t=Math.abs(x).toFixed(2);return t==='0.00'?'0.00':(x>0?'+':MINUS)+t;};
+const plural=(n,w)=>n+' '+w+(n===1?'':'s');
+function fmtDH(n,hpd){
+  if(n===Infinity)return 'not reachable';
+  const d=idiv(n,hpd),h=n%hpd,p=[];
+  if(d)p.push(plural(d,'day'));
+  if(h)p.push(plural(h,'hr'));
+  return p.length?p.join(' '):'0 hrs';
+}
+const days=(x,hpd)=>+(x/hpd).toFixed(2);
+
+// ---------- sheet data (45 rows read from the printed report) ----------
+// [S.No, name, conducted hrs (1-30 Sep), attended hrs, sheet % (month), sheet % (cumulative 17 Aug - 30 Sep)]
+const ROWS=[[1, "AARTHI C", 64, 32, 50, 47], [2, "ABDUL KARIM SAIT H", 64, 25, 39, 33], [3, "ANISHA F", 64, 42, 66, 70], [4, "BABU S", 64, 3, 5, 4], [5, "BALAGURU C", 64, 24, 38, 33], [6, "BARATH S", 64, 32, 50, 56], [7, "DAVIDRAJ J", 64, 23, 36, 30], [8, "DHANUSH M", 64, 33, 52, 52], [9, "DHARSHINI B", 64, 36, 56, 61], [10, "DILLIRAJ S", 0, 0, 0, 0], [11, "DINESH A (05.01.2006)", 64, 25, 39, 41], [12, "DINESH S (20.08.2007)", 64, 25, 39, 31], [13, "DINESH S (02.08.2007)", 38, 13, 34, 34], [14, "DIVYA DHARSHINI V", 64, 33, 52, 61], [15, "ELAMARAN V", 64, 22, 34, 38], [16, "FRANKLIN M K", 64, 18, 28, 22], [17, "GOWTHAM KISHORE R", 64, 42, 66, 65], [18, "HARIHARAN P (18.06.2007)", 59, 23, 39, 39], [19, "HARINI PRIYA P", 64, 29, 45, 58], [20, "HEMAKUMAR M", 64, 7, 11, 9], [21, "HEWIN CHANDRAN V J", 64, 19, 30, 23], [22, "ILYAS AHMED I", 64, 6, 9, 7], [23, "INBARASAN G", 64, 23, 36, 36], [24, "JAMES J", 64, 34, 53, 49], [25, "JANANI D", 64, 28, 44, 30], [26, "JANCY R", 64, 38, 59, 70], [27, "JASANTH M P", 64, 13, 20, 22], [28, "JAYASRI B", 64, 41, 64, 70], [29, "JAYASURIYA B", 64, 20, 31, 36], [30, "KALAISELVAN K", 64, 41, 64, 52], [31, "KAMAL B", 64, 11, 17, 12], [32, "KAMALI K", 64, 19, 30, 34], [33, "KAVIYARASAN J", 64, 45, 70, 76], [34, "KESAVA PERUMAL N", 64, 35, 55, 58], [35, "KISHORE D (26.11.2006)", 56, 27, 48, 48], [36, "KISHORE N (12.10.2006)", 64, 46, 72, 76], [37, "KISHORE S (15.06.2007)", 64, 11, 17, 19], [38, "KOWSHIK VEERA G", 64, 39, 61, 70], [39, "LOKESH A", 64, 37, 58, 59], [40, "MADANBABU A", 64, 41, 64, 46], [41, "MAHALAKSHMI R", 64, 50, 78, 84], [42, "MAHENDIRAN S", 64, 25, 39, 45], [43, "MALLELA JOSHVA M S", 64, 21, 33, 31], [44, "MANIKANDAN V", 64, 18, 28, 20], [45, "MITHILESH R", 64, 40, 63, 66]];
+const EARLIER_C=36; // 9 days x 4 hours before 1 Sep (25 cumulative days minus 16)
+
+// ---------- calculator ----------
+let stepMode='hour';
+let judgeRounded=false;
+
+function numVal(id,lo,hi){
+  const v=$(id).value.trim();
+  if(v==='')return NaN;
+  const n=Number(v);
+  return Number.isInteger(n)&&n>=lo&&n<=hi?n:NaN;
+}
+function readState(){
+  const cum=$('cum').checked;
+  const a=numVal('att',0,100000),c=numVal('con',0,100000);
+  const hpd=numVal('hpd',1,24),T=numVal('tgt',1,100);
+  let ea=0,ec=0;
+  if(cum){ea=numVal('eatt',0,100000);ec=numVal('econ',0,100000);}
+  const sp=$('sheetpct').value.trim()===''?null:numVal('sheetpct',0,100);
+  if([a,c,hpd,T,ea,ec].some(Number.isNaN))return{error:'Enter whole numbers in every field. Hours per day must be 1 to 24 and the target 1 to 100.'};
+  if(sp!==null&&Number.isNaN(sp))return{error:'The printed percentage must be a whole number from 0 to 100.'};
+  if(a>c)return{error:'Attended hours ('+a+') cannot be more than conducted hours ('+c+').'};
+  if(ea>ec)return{error:'Earlier attended hours ('+ea+') cannot be more than earlier conducted hours ('+ec+').'};
+  return{A:a+ea,C:c+ec,hpd,T,sp,cum};
+}
+
+function renderCalc(){
+  const s=readState(),out=$('results');
+  if(s.error){out.innerHTML='<div class="notice">'+s.error+'</div>';return;}
+  const {A,C,hpd,T,sp}=s;
+  if(C===0){
+    out.innerHTML='<div class="notice">No hours have been conducted yet. The sheet prints 0% in this case (see S.No 10), but 0 of 0 hours has no percentage.</div>';
+    return;
+  }
+  const ex=exactPct(A,C),hu=pctHalfUp(A,C);
+  const T2=thr2(T,judgeRounded);
+  const ok=meets(A,C,T2);
+  const gap=T-(judgeRounded?hu:ex);
+  const pill=ok?'<span class="pill good">Meets '+T+'%</span>'
+    :gap<=5?'<span class="pill warn">'+fx(gap)+' points short of '+T+'%</span>'
+    :'<span class="pill bad">'+fx(gap)+' points below '+T+'%</span>';
+
+  // impact of the next hour and the next day
+  const tile=(kind,title,a2,c2)=>{
+    const e2=exactPct(a2,c2),d=e2-ex,h2=pctHalfUp(a2,c2);
+    const cls=kind==='p'?'good':'bad';
+    return '<div class="tile '+cls+'"><span class="k">'+title+'</span><span class="d">'+sgn(d)+' pts</span>'
+      +'<span class="r">becomes <span class="num">'+fx(e2)+'%</span> · sheet <span class="num">'+h2+'%</span>'+(h2!==hu?' ('+(h2>hu?'+':MINUS)+Math.abs(h2-hu)+')':' (no change)')+'</span></div>';
+  };
+
+  // planner
+  const need=needHours(A,C,T2),miss=canMiss(A,C,T2);
+  const needBox='<div class="box"><h3>To reach '+T+'%</h3>'
+    +(need===0?'<span class="v ok">Already there</span><span class="s">Counted '+(judgeRounded?'on the sheet\'s rounded value.':'on the exact value.')+'</span>'
+      :need===Infinity?'<span class="v no">Not reachable</span><span class="s">Only possible at exactly 100% with no absence.</span>'
+      :'<span class="v">'+plural(need,'hour')+'</span><span class="s">Attend every conducted hour for the next '+fmtDH(need,hpd)+'.</span>')+'</div>';
+  const missBox='<div class="box"><h3>Safe to miss</h3>'
+    +(miss<0?'<span class="v no">None yet</span><span class="s">You are below '+T+'% now.</span>'
+      :'<span class="v">'+plural(miss,'hour')+'</span><span class="s">Up to '+fmtDH(miss,hpd)+' and you stay at '+T+'% or above.</span>')+'</div>';
+
+  // step table
+  const N=stepMode==='hour'?12:10,k=stepMode==='hour'?1:hpd;
+  let rows='<tr class="now"><td>Now</td><td class="num">'+fx(ex)+'</td><td></td><td class="num">'+fx(ex)+'</td><td></td><td class="num">'+hu+'</td></tr>';
+  let pp=ex,pq=ex;
+  for(let i=1;i<=N;i++){
+    const n=i*k,P=exactPct(A+n,C+n),Q=exactPct(A,C+n);
+    rows+='<tr><td>'+(stepMode==='hour'?plural(i,'hour'):plural(i,'day')+' <span class="muted">('+n+' hrs)</span>')+'</td>'
+      +'<td class="num">'+fx(P)+'</td><td class="num up">'+sgn(P-pp)+'</td>'
+      +'<td class="num">'+fx(Q)+'</td><td class="num down">'+sgn(Q-pq)+'</td>'
+      +'<td class="num">'+pctHalfUp(A+n,C+n)+' / '+pctHalfUp(A,C+n)+'</td></tr>';
+    pp=P;pq=Q;
+  }
+
+  out.innerHTML=
+  '<section class="panel" aria-label="Result"><div class="hero"><div><div class="label">'+(s.cum?'Cumulative attendance':'Attendance')+' (exact)</div>'
+  +'<div class="big">'+fx(ex)+'<small>%</small></div>'
+  +'<div class="muted" style="margin-top:8px">'+A+' of '+C+' hours · '+days(A,hpd)+' of '+days(C,hpd)+' days</div></div>'
+  +'<div class="sheetbox"><div class="label">Sheet prints</div><div class="mid">'+hu+'<small>%</small></div><div class="muted">'+(ex===hu?'exact':'rounded half up')+'</div></div></div>'
+  +'<div><div class="meter" role="img" aria-label="'+fx(ex)+' percent, target '+T+' percent"><i style="width:'+Math.min(ex,100)+'%"></i><b style="left:calc('+T+'% - 1px)"></b></div>'
+  +'<div class="meter-scale"><span>0</span><span>target '+T+'</span><span>100</span></div></div>'+'<div>'+pill+'</div></section>'
+
+  +'<section class="panel"><div><h2>What the next hour and the next day do</h2><p class="muted">Every conducted hour goes into the total, so attending adds to both parts and missing adds only to the bottom.</p></div>'
+  +'<div class="tiles">'
+  +tile('p','Attend the next hour',A+1,C+1)+tile('a','Miss the next hour',A,C+1)
+  +tile('p','Attend the next full day ('+hpd+' hrs)',A+hpd,C+hpd)+tile('a','Miss the next full day ('+hpd+' hrs)',A,C+hpd)
+  +'</div></section>'
+
+  +'<section class="panel"><h2>Target planner</h2><div class="plan">'+needBox+missBox+'</div></section>'
+
+  +'<section class="panel"><div class="row-head"><h2>Step by step</h2>'
+  +'<div class="seg" role="group" aria-label="Step size"><button type="button" data-step="hour" aria-pressed="'+(stepMode==='hour')+'">Per hour</button><button type="button" data-step="day" aria-pressed="'+(stepMode==='day')+'">Per day</button></div></div>'
+  +'<div class="table-wrap"><table><thead><tr><th>After</th><th>If present</th><th>Change</th><th>If absent</th><th>Change</th><th>Sheet %</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+  +'<p class="hint">Change is measured from the row above, in percentage points. The last column is what the sheet would print (present / absent). The longer the record, the less each hour moves it.</p></section>'
+
+  +whatIfHTML()
+  +methodHTML(A,C,ex,sp);
+  bindDynamic();
+  updateWhatIf();
+}
+
+function whatIfHTML(){
+  return '<section class="panel"><h2>What if</h2><div class="fields">'
+  +'<div class="field"><label for="wd">Days ahead</label><input id="wd" type="number" inputmode="numeric" min="0" max="200" step="1" value="'+(window.__wd??5)+'"></div>'
+  +'<div class="field"><label for="wh">Hours attended each day</label><input id="wh" type="number" inputmode="numeric" min="0" step="1" value="'+(window.__wh??3)+'"></div>'
+  +'</div><div id="wi-out" class="verdict neutral"></div></section>';
+}
+function updateWhatIf(){
+  const s=readState();if(s.error||s.C===0)return;
+  const wd=numVal('wd',0,200),wh0=numVal('wh',0,24);
+  const o=$('wi-out');
+  if(Number.isNaN(wd)||Number.isNaN(wh0)){o.textContent='Enter whole numbers for days and hours.';return;}
+  window.__wd=wd;window.__wh=wh0;
+  const wh=Math.min(wh0,s.hpd);
+  const A2=s.A+wd*wh,C2=s.C+wd*s.hpd,e=exactPct(A2,C2),d=e-exactPct(s.A,s.C);
+  o.innerHTML='After '+plural(wd,'day')+' of '+plural(wh,'hour')+' out of '+s.hpd+': <span class="num">'+fx(e)+'%</span> ('+sgn(d)+' pts), sheet would print <span class="num">'+pctHalfUp(A2,C2)+'%</span>.'
+    +(wh0>s.hpd?' Hours attended was capped at '+s.hpd+' per day.':'');
+}
+
+function methodHTML(A,C,ex,sp){
+  let h='<section class="panel"><h2>Which rounding does the sheet use?</h2><div>';
+  METHODS.forEach(([name,f])=>{
+    const v=f(A,C);
+    h+='<div class="match-row"><span>'+name+'</span><span class="num">'+v+'%'+(sp!==null&&v===sp?' <span class="ok">matches</span>':'')+'</span></div>';
+  });
+  h+='</div>';
+  if(sp===null){
+    h+='<div class="verdict neutral">Enter the percentage printed on your sheet to see which method reproduces it.</div>';
+  }else if(pctHalfUp(A,C)===sp){
+    h+='<div class="verdict good">The sheet\'s '+sp+'% is exactly what standard rounding gives for '+A+'/'+C+' ('+fx(ex)+'%).</div>';
+  }else{
+    const m=METHODS.filter(([,f])=>f(A,C)===sp).map(([n])=>n);
+    if(m.length){
+      h+='<div class="verdict bad">The sheet\'s '+sp+'% differs from standard rounding ('+pctHalfUp(A,C)+'%). It matches: '+m.join(', ')+'.</div>';
+    }else{
+      const ca=countsPrinting(sp,C);
+      h+='<div class="verdict bad">No rounding method turns '+A+'/'+C+' ('+fx(ex)+'%) into '+sp+'%.'
+        +(ca.length?' Standard rounding prints '+sp+'% for '+(ca.length===1?ca[0]:ca[0]+' to '+ca[ca.length-1])+' attended hours out of '+C+'.':' No attended count out of '+C+' prints '+sp+'%.')
+        +' Ask the office which hours they counted.</div>';
+    }
+  }
+  return h+'</section>';
+}
+
+function bindDynamic(){
+  document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{stepMode=b.dataset.step;renderCalc();});
+  ['wd','wh'].forEach(id=>$(id).addEventListener('input',updateWhatIf));
+}
+
+// ---------- student picker ----------
+function buildPicker(){
+  const sel=$('student');
+  sel.innerHTML='<option value="">Pick a name</option>'+ROWS.map(r=>'<option value="'+r[0]+'">'+r[0]+'. '+r[1]+'</option>').join('');
+}
+function loadStudent(n){
+  const r=ROWS.find(x=>x[0]===n);if(!r)return;
+  const [,,c,a,sp,cp]=r;
+  $('att').value=a;$('con').value=c;
+  if($('cum').checked){
+    const totC=EARLIER_C+c,cumA=Math.round(cp*totC/100);
+    const ea=Math.max(0,Math.min(EARLIER_C,cumA-a));
+    $('eatt').value=ea;$('econ').value=EARLIER_C;
+    $('sheetpct').value=cp;
+  }else{
+    $('sheetpct').value=sp;
+  }
+  $('student').value=String(n);
+  $('example-tag').hidden=true;
+  renderCalc();
+}
+
+// ---------- audit ----------
+let sortKey='n',sortDir=1;
+function auditData(){
+  return ROWS.map(([n,name,c,a,sp,cp])=>{
+    const hu=pctHalfUp(a,c),totC=EARLIER_C+c,cumA=Math.round(cp*totC/100);
+    return{n,name,c,a,sp,cp,ex:exactPct(a,c),hu,ok:c===0?null:hu===sp,earlier:cumA-a,exactBase:c===64};
+  });
+}
+function renderAudit(){
+  const D=auditData(),el=$('view-audit');
+  const valid=D.filter(r=>r.c>0);
+  const matchCounts=METHODS.map(([name,f])=>[name,valid.filter(r=>f(r.a,r.c)===r.sp).length]);
+  const T=numVal('tgt',1,100)||75;
+  const classPct=100*valid.reduce((s,r)=>s+r.a,0)/valid.reduce((s,r)=>s+r.c,0);
+  const meetT=D.filter(r=>r.sp>=T).length,meetC=D.filter(r=>r.cp>=T).length;
+  const frac=r=>(100*r.a/r.c)%1;
+  const ev1=valid.find(r=>pctHalfEven(r.a,r.c)!==r.sp);
+  const evHalf=valid.filter(r=>(200*r.a)%r.c===0&&(100*r.a)%r.c!==0&&2*((100*r.a)%r.c)===r.c&&pctHalfEven(r.a,r.c)!==pctHalfUp(r.a,r.c))[0];
+  const evFloor=valid.filter(r=>frac(r)>=.5).sort((x,y)=>frac(y)-frac(x))[0];
+  const evCeil=valid.filter(r=>frac(r)>0).sort((x,y)=>frac(x)-frac(y))[0];
+  const reduced=D.filter(r=>r.c>0&&r.c!==64);
+  const zero=D.filter(r=>r.c===0);
+  const badEarlier=D.filter(r=>r.earlier<0||r.earlier>EARLIER_C);
+
+  const allMatch=matchCounts[0][1]===valid.length;
+  el.innerHTML=
+  '<section class="panel"><h2>What method does the sheet use?</h2>'
+  +'<div class="verdict '+(allMatch?'good':'bad')+'">'+(allMatch
+     ?'Every monthly percentage on the sheet ('+matchCounts[0][1]+' of '+valid.length+') equals attended ÷ conducted × 100, rounded to the nearest whole number with .5 rounding up. That is the standard method.'
+     :'Only '+matchCounts[0][1]+' of '+valid.length+' monthly percentages match standard rounding. See the table below for the rows that do not.')+'</div>'
+  +'<div class="stats">'+matchCounts.map(([n,c])=>'<div class="stat"><div class="label">'+n+'</div><div class="v">'+c+' <small class="muted">/ '+valid.length+'</small></div></div>').join('')+'</div>'
+  +'<ul class="findings">'
+  +(evHalf?'<li><b>Half rounds up.</b> '+evHalf.name+' attended '+evHalf.a+' of '+evHalf.c+' hours, exactly '+fx(exactPct(evHalf.a,evHalf.c))+'%. The sheet prints '+evHalf.sp+'%. Banker\'s rounding would print '+pctHalfEven(evHalf.a,evHalf.c)+'%.</li>':'')
+  +(evFloor?'<li><b>Not rounded down.</b> '+evFloor.name+': '+evFloor.a+'/'+evFloor.c+' = '+fx(exactPct(evFloor.a,evFloor.c))+'%, printed as '+evFloor.sp+'%. Cutting the decimals would give '+pctFloor(evFloor.a,evFloor.c)+'%.</li>':'')
+  +(evCeil?'<li><b>Not rounded up.</b> '+evCeil.name+': '+evCeil.a+'/'+evCeil.c+' = '+fx(exactPct(evCeil.a,evCeil.c))+'%, printed as '+evCeil.sp+'%. Always rounding up would give '+pctCeil(evCeil.a,evCeil.c)+'%.</li>':'')
+  +'</ul></section>'
+
+  +'<section class="panel"><h2>Things the sheet does differently</h2><ul class="findings">'
+  +(reduced.length?'<li><b>Different hours base for '+reduced.length+' students.</b> Most rows are out of 64 hours (16 days × 4). '
+     +reduced.map(r=>r.name+' is out of '+r.c+' ('+r.sp+'% printed, '+pctHalfUp(r.a,64)+'% if counted out of 64)').join('; ')
+     +'. The maths is right for the base used, but the base is not the same for everyone. This is a question for the office, for example late joining or approved leave.</li>':'')
+  +(zero.length?'<li><b>0 of 0 hours.</b> '+zero.map(r=>'S.No '+r.n+' '+r.name).join(', ')+' has no conducted hours and the sheet prints 0%. A percentage of 0 hours is undefined, so this row is a blank, not a zero.</li>':'')
+  +'<li><b>The cumulative column cannot be recomputed.</b> The sheet does not print the hours from 17/08 to 31/08. If the cumulative base is 25 days × 4 = 100 hours, the cumulative % is the attended hours, and the earlier-period hours implied for each student ('+(badEarlier.length?badEarlier.length+' impossible':'all within 0 to '+EARLIER_C)+') are shown in the last column below. Nothing there is impossible, but only the office can confirm it.</li>'
+  +'<li><b>Class totals.</b> '+classPct.toFixed(1)+'% of conducted hours were attended in the month. '+meetT+' of '+D.length+' students are at or above '+T+'% for the month and '+meetC+' on the cumulative column (target set in the calculator).</li>'
+  +'</ul></section>'
+
+  +'<section class="panel"><div class="row-head"><h2>Register, recalculated</h2></div>'
+  +'<div class="toolbar"><input type="search" id="q" placeholder="Search by name or S.No" aria-label="Search students"><select id="flt" aria-label="Filter rows"><option value="all">All rows</option><option value="bad">Sheet differs from recalculation</option><option value="base">Not out of 64 hours</option><option value="below">Below target (month)</option></select></div>'
+  +'<div class="table-wrap"><table><thead><tr>'
+  +[['n','S.No'],['name','Name'],['a','Attended'],['c','Conducted'],['ex','Exact %'],['hu','Recalc'],['sp','Sheet'],['ok','Check'],['cp','Cumul. sheet'],['earlier','Earlier hrs']].map(([k,l])=>'<th><button type="button" data-sort="'+k+'">'+l+'</button></th>').join('')+'<th></th></tr></thead><tbody id="aud-body"></tbody></table></div>'
+  +'<p class="hint">Recalc is attended ÷ conducted × 100, rounded half up. Earlier hrs is the cumulative % of 100 hours minus this month\'s attended hours, out of '+EARLIER_C+'. Hours were read from a photo of the printed sheet, so check a row against the paper if something looks off.</p></section>';
+
+  const body=$('aud-body');
+  function paint(){
+    const q=$('q').value.trim().toLowerCase(),f=$('flt').value;
+    let rows=D.filter(r=>(!q||r.name.toLowerCase().includes(q)||String(r.n)===q)
+      &&(f==='all'||(f==='bad'&&r.ok===false)||(f==='base'&&r.c!==64)||(f==='below'&&r.sp<T)));
+    rows.sort((x,y)=>{
+      const a=x[sortKey],b=y[sortKey];
+      const c=typeof a==='string'?a.localeCompare(b):(a===null?-1:b===null?1:(a>b)-(a<b));
+      return c*sortDir||x.n-y.n;
+    });
+    body.innerHTML=rows.map(r=>
+      '<tr><td class="num">'+r.n+'</td><td class="name">'+r.name+(r.c===0?'<span class="chip">0 h conducted</span>':r.c!==64?'<span class="chip">'+r.c+' h base</span>':'')+'</td>'
+      +'<td class="num">'+r.a+'</td><td class="num">'+r.c+'</td><td class="num">'+(r.c?fx(r.ex):'n/a')+'</td><td class="num">'+r.hu+'</td><td class="num">'+r.sp+'</td>'
+      +'<td class="'+(r.ok===null?'na':r.ok?'ok':'no')+'">'+(r.ok===null?'undefined':r.ok?'match':'differs')+'</td>'
+      +'<td class="num">'+r.cp+'</td><td class="num">'+(r.exactBase?'':'≈')+r.earlier+'/'+EARLIER_C+'</td>'
+      +'<td><button type="button" class="btn" data-open="'+r.n+'" aria-label="Open '+r.name+' in the calculator">Open</button></td></tr>'
+    ).join('')||'<tr><td colspan="11" class="muted" style="text-align:center">No rows match.</td></tr>';
+    body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{
+      location.hash='calculator';
+      loadStudent(Number(b.dataset.open));
+    });
+  }
+  $('q').addEventListener('input',paint);$('flt').addEventListener('change',paint);
+  el.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{
+    if(sortKey===b.dataset.sort)sortDir=-sortDir;else{sortKey=b.dataset.sort;sortDir=1;}
+    paint();
+  });
+  paint();
+}
+
+// ---------- monthly scans ----------
+const LS_KEY='attendance-months-v1';
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num0=v=>{if(typeof v==='string'&&v.trim()!=='')v=Number(v);return Number.isInteger(v)&&v>=0&&v<=100000?v:null;};
+function cleanRows(arr,keepNull){
+  if(!Array.isArray(arr))return [];
+  return arr.filter(r=>r&&typeof r.name==='string'&&r.name.trim()).slice(0,500)
+    .map((r,i)=>({n:num0(r.n)??(keepNull?null:i+1),name:r.name.trim().slice(0,80),c:num0(r.c),a:num0(r.a),sp:num0(r.sp),cp:num0(r.cp)}));
+}
+let months=[],mconfirm=null,sampleFn=null,sampleReady=false,maxImgs=0,imgTypes='image/jpeg,image/png,image/webp,image/gif';
+const scan={mode:'photos',files:[],label:'',busy:false,ctl:null,err:'',draft:null,paste:'',cache:{},progress:''};
+const PROMPT='These images are the pages of ONE printed college report titled "Cumulative Attendance Report", photographed (possibly sideways or upside down). '
+ +'Each student row has: S.No, Register No, Name, then for the month Conducted Hours, Attended Hours, Attn %, then a cumulative Attn % column, then a signature. '
+ +'Read EVERY student row on EVERY image in S.No order. Do not skip, merge or invent rows. '
+ +'Reply with only JSON like {"period":"1/09/2026 to 30/09/2026","rows":[{"n":1,"name":"AARTHI C","c":64,"a":32,"sp":50,"cp":47}]} '
+ +'where c = conducted hours, a = attended hours, sp = the month Attn % printed on the sheet, cp = the cumulative Attn % printed on the sheet. '
+ +'Use null for any number you cannot read with confidence; never guess. Keep names exactly as printed, including a date of birth in brackets. Leave out register numbers.';
+
+function loadMonths(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw){const m=JSON.parse(raw);
+      if(Array.isArray(m)&&m.length)return m.filter(x=>x&&typeof x.label==='string').map(x=>({id:String(x.id),label:x.label.slice(0,40),source:String(x.source||''),rows:cleanRows(x.rows)}));}
+  }catch(e){}
+  return [{id:'seed',label:'September 2026',source:'typed from your photos',rows:cleanRows(ROWS.map(([n,name,c,a,sp,cp])=>({n,name,c,a,sp,cp})))}];
+}
+function saveMonths(){try{localStorage.setItem(LS_KEY,JSON.stringify(months));}catch(e){}}
+
+function rowCheck(r){
+  if(r.c===null||r.a===null)return{k:'no',t:'unread'};
+  if(r.a>r.c)return{k:'no',t:'attended > conducted'};
+  if(r.c===0)return{k:'na',t:'undefined'};
+  const hu=pctHalfUp(r.a,r.c);
+  if(r.sp===null)return{k:'na',t:'no % read',hu};
+  return hu===r.sp?{k:'ok',t:'match',hu}:{k:'no',t:'differs ('+hu+')',hu};
+}
+function monthStats(m,T){
+  const cks=m.rows.map(r=>({r,ck:rowCheck(r)}));
+  const usable=cks.filter(x=>x.r.c!==null&&x.r.a!==null&&x.r.c>0&&x.r.a<=x.r.c);
+  const withPct=usable.filter(x=>x.r.sp!==null);
+  const ok=withPct.filter(x=>x.ck.k==='ok').length;
+  const differs=withPct.filter(x=>x.ck.k==='no');
+  const freq=new Map();usable.forEach(x=>freq.set(x.r.c,(freq.get(x.r.c)||0)+1));
+  let base=0,best=0;freq.forEach((v,k)=>{if(v>best){best=v;base=k;}});
+  const odd=usable.filter(x=>x.r.c!==base);
+  const sA=usable.reduce((s,x)=>s+x.r.a,0),sC=usable.reduce((s,x)=>s+x.r.c,0);
+  const meet=usable.filter(x=>(x.r.sp!==null?x.r.sp:x.ck.hu)>=T).length;
+  return{ok,withPct:withPct.length,differs,base,odd,avg:sC?100*sA/sC:null,meet,usable:usable.length,total:m.rows.length};
+}
+const keyOf=n=>n.toUpperCase().replace(/\s+/g,' ').trim();
+function aggregate(){
+  const map=new Map();
+  months.forEach((m,mi)=>m.rows.forEach(r=>{
+    const k=keyOf(r.name);let s=map.get(k);
+    if(!s){s={key:k,name:r.name,per:[],A:0,C:0};map.set(k,s);}
+    s.per[mi]=r;
+    if(r.c!==null&&r.a!==null&&r.c>0&&r.a<=r.c){s.A+=r.a;s.C+=r.c;}
+  }));
+  return [...map.values()].map(s=>{
+    const vals=months.map((m,i)=>{const r=s.per[i];if(!r)return null;if(r.sp!==null)return r.sp;const ck=rowCheck(r);return ck.hu??null;});
+    const have=vals.filter(v=>v!==null);
+    s.vals=vals;
+    s.delta=have.length>=2?have[have.length-1]-have[have.length-2]:null;
+    s.overall=s.C?100*s.A/s.C:null;
+    s.overallR=s.C?pctHalfUp(s.A,s.C):null;
+    return s;
+  });
+}
+
+// ---- layout of the Months tab
+function buildMonthsStatic(){
+  $('view-months').innerHTML=
+   '<section class="panel" id="scan-panel"></section>'
+  +'<div id="months-cards" class="mcards"></div>'
+  +'<section class="panel"><div><h2>Every student, every month</h2><p class="muted">Month columns show the printed %, and turn red where the printed % differs from standard rounding. Overall is total attended ÷ total conducted across the months listed.</p></div>'
+  +'<div class="toolbar"><input type="search" id="mq" placeholder="Search by name" aria-label="Search students" style="flex:1 1 200px;min-width:0;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:.95rem var(--font-ui)">'
+  +'<select id="msort" aria-label="Sort students"><option value="name">Sort by name</option><option value="low">Lowest overall first</option><option value="high">Highest overall first</option><option value="drop">Biggest drop last month</option></select></div>'
+  +'<div class="table-wrap" id="stu-wrap"></div>'
+  +'<p class="hint">Open puts the student\'s combined hours into the calculator. Months are kept in this browser only.</p></section>';
+}
+
+function renderMonthCards(){
+  const T=numVal('tgt',1,100)||75;
+  $('months-cards').innerHTML=months.map(m=>{
+    const s=monthStats(m,T);
+    const meth=s.withPct===0?'<li class="muted">No printed percentages to check.</li>'
+      :s.differs.length===0?'<li class="ok">All '+s.withPct+' printed percentages match standard rounding.</li>'
+      :'<li class="no">'+s.differs.length+' of '+s.withPct+' printed percentages differ: '+s.differs.slice(0,4).map(x=>esc(x.r.name)+' ('+x.r.sp+' vs '+x.ck.hu+')').join(', ')+(s.differs.length>4?' and more':'')+'.</li>';
+    return '<div class="stat"><div class="row-head"><strong>'+esc(m.label)+'</strong>'
+      +'<button type="button" class="btn" data-mact="rm" data-id="'+esc(m.id)+'">'+(mconfirm===m.id?'Confirm remove':'Remove')+'</button></div>'
+      +'<div class="hint">'+s.total+' rows'+(m.source?' · '+esc(m.source):'')+'</div><ul>'+meth
+      +'<li>Usually out of '+s.base+' hours'+(s.odd.length?'; '+s.odd.length+' row'+(s.odd.length===1?'':'s')+' use another base.':'.')+'</li>'
+      +'<li>Class '+(s.avg===null?'n/a':'<span class="num">'+s.avg.toFixed(1)+'%</span>')+' of conducted hours attended; '+s.meet+' of '+s.usable+' at or above '+T+'%.</li></ul></div>';
+  }).join('');
+}
+
+function paintStudents(){
+  const q=$('mq').value.trim().toLowerCase(),sort=$('msort').value;
+  let list=aggregate().filter(s=>!q||s.name.toLowerCase().includes(q));
+  const cmp={
+    name:(a,b)=>a.name.localeCompare(b.name),
+    low:(a,b)=>(a.overall??1e9)-(b.overall??1e9),
+    high:(a,b)=>(b.overall??-1)-(a.overall??-1),
+    drop:(a,b)=>(a.delta??1e9)-(b.delta??1e9)
+  }[sort];
+  list.sort((a,b)=>cmp(a,b)||a.name.localeCompare(b.name));
+  const head='<tr><th>Name</th>'+months.map(m=>'<th>'+esc(m.label)+'</th>').join('')+'<th>Overall</th><th>Hours</th><th>Last change</th><th></th></tr>';
+  const body=list.map(s=>{
+    const cells=months.map((m,i)=>{
+      const r=s.per[i];
+      if(!r)return '<td class="muted">–</td>';
+      const ck=rowCheck(r);
+      return '<td class="num '+(ck.k==='no'?'no':'')+'"'+(ck.k==='no'?' title="'+esc(ck.t)+'"':'')+'>'+(s.vals[i]===null?'–':s.vals[i])+'</td>';
+    }).join('');
+    const d=s.delta===null?'–':(s.delta>0?'+':s.delta<0?MINUS:'')+Math.abs(s.delta);
+    return '<tr><td class="name">'+esc(s.name)+'</td>'+cells
+      +'<td class="num">'+(s.overallR===null?'–':s.overallR+'%')+'</td>'
+      +'<td class="num muted">'+(s.C?s.A+'/'+s.C:'–')+'</td>'
+      +'<td class="num '+(s.delta>0?'up':s.delta<0?'down':'')+'">'+d+'</td>'
+      +'<td><button type="button" class="btn" data-mact="open" data-key="'+esc(s.key)+'" '+(s.C?'':'disabled')+' aria-label="Open '+esc(s.name)+' in the calculator">Open</button></td></tr>';
+  }).join('')||'<tr><td colspan="'+(months.length+5)+'" class="muted" style="text-align:center">No students match.</td></tr>';
+  $('stu-wrap').innerHTML='<table><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
+}
+
+// ---- adding a month
+const ERRS={
+  not_granted:'Claude access was not allowed for this page, so photos cannot be read. Paste the rows instead.',
+  sampling_disabled:'Claude is not available for this account. Paste the rows instead.',
+  rate_limited:'Too many requests or your usage limit is reached. Try again later.',
+  image_rejected:'One of the photos could not be used. Use JPEG or PNG photos under 20 MB.',
+  invalid_json:'The reply could not be read as a table. Try again with sharper photos, one page per photo.',
+  refused:'The photos were declined. Try different photos.',
+  session_expired:'Sign in again to Claude and retry.',
+  empty_completion:'Nothing came back. Try again.'
+};
+const errCopy=e=>e&&e.code==='cancelled'?'':(ERRS[e&&e.code]||'Reading the photos failed. Try again in a moment.');
+
+async function rotateBlob(file,deg){
+  const d=((deg%360)+360)%360;
+  if(!d)return file;
+  const bmp=await createImageBitmap(file,{imageOrientation:'from-image'});
+  const cv=document.createElement('canvas'),swap=d===90||d===270;
+  cv.width=swap?bmp.height:bmp.width;cv.height=swap?bmp.width:bmp.height;
+  const x=cv.getContext('2d');
+  x.translate(cv.width/2,cv.height/2);x.rotate(d*Math.PI/180);
+  x.drawImage(bmp,-bmp.width/2,-bmp.height/2);
+  return new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej({code:'image_rejected'}),'image/jpeg',.92));
+}
+
+function renderScan(){
+  const p=$('scan-panel');if(!p)return;
+  let h='<div class="row-head"><div><h2>Add a month</h2><p class="muted">Bring in another month\'s printed sheet. You check every number before it is saved.</p></div>'
+   +'<div class="seg" role="group" aria-label="How to add"><button type="button" data-act="mode" data-m="photos" aria-pressed="'+(scan.mode==='photos')+'">Photos</button><button type="button" data-act="mode" data-m="paste" aria-pressed="'+(scan.mode==='paste')+'">Paste rows</button></div></div>';
+  if(!scan.draft){
+    if(scan.mode==='photos'){
+      if(!sampleReady)h+='<div class="verdict neutral">Checking whether photo reading is available…</div>';
+      else if(sampleFn)h+=photosBlock('Claude');
+      else{
+        h+=geminiSetupHTML();
+        if(gem.key&&gem.model)h+=photosBlock('Gemini');
+      }
+    }else{
+      h+='<p class="hint">One student per line: name, conducted hours, attended hours, and optionally the printed % and cumulative %. Commas or tabs both work.</p>'
+       +'<textarea id="scan-paste" rows="7" placeholder="AARTHI C, 64, 32, 50\nABDUL KARIM SAIT H, 64, 25, 39">'+esc(scan.paste)+'</textarea>'
+       +'<div class="actions"><button type="button" class="btn primary" data-act="paste-use">Use these rows</button></div>';
+    }
+    if(scan.err)h+='<div class="notice">'+esc(scan.err)+'</div>';
+  }else{
+    const d=scan.draft;
+    h+='<h3>Check what was read</h3><div id="draft-sum" class="verdict neutral"></div>'
+     +(d.warn&&d.warn.length?'<div class="notice">'+d.warn.map(esc).join('<br>')+'</div>':'')
+     +(d.period?'<p class="hint">Period on the sheet: '+esc(d.period)+'</p>':'')
+     +'<div class="table-wrap"><table><thead><tr><th>S.No</th><th>Name</th><th>Conducted</th><th>Attended</th><th>Printed %</th><th>Check</th><th></th></tr></thead><tbody>'
+     +d.rows.map((r,i)=>'<tr><td class="num">'+r.n+'</td>'
+       +'<td><input class="cell namecell" type="text" data-i="'+i+'" data-f="name" value="'+esc(r.name)+'" aria-label="Name, row '+r.n+'"></td>'
+       +['c','a','sp'].map(f=>'<td><input class="cell" type="number" min="0" step="1" inputmode="numeric" data-i="'+i+'" data-f="'+f+'" value="'+(r[f]===null?'':r[f])+'" aria-label="'+({c:'Conducted',a:'Attended',sp:'Printed %'}[f])+', row '+r.n+'"></td>').join('')
+       +'<td id="dck-'+i+'"></td><td><button type="button" class="btn" data-act="rmrow" data-i="'+i+'" aria-label="Remove row '+r.n+'">✕</button></td></tr>').join('')
+     +'</tbody></table></div>'
+     +'<div class="fields"><div class="field full"><label for="scan-label">Month name</label><input id="scan-label" type="text" maxlength="40" placeholder="e.g. October 2026" value="'+esc(scan.label)+'"></div></div>'
+     +'<div class="actions"><button type="button" class="btn primary" data-act="save">Save month</button><button type="button" class="btn" data-act="discard">Discard</button></div>';
+  }
+  p.innerHTML=h;
+  if(scan.draft){scan.draft.rows.forEach((r,i)=>paintDraftCheck(i));paintDraftSummary();}
+}
+function paintDraftCheck(i){
+  const c=$('dck-'+i);if(!c)return;
+  const ck=rowCheck(scan.draft.rows[i]);
+  c.className=ck.k;c.textContent=ck.t;
+}
+function paintDraftSummary(){
+  const el=$('draft-sum');if(!el)return;
+  const cks=scan.draft.rows.map(rowCheck);
+  const m=cks.filter(c=>c.k==='ok').length,bad=cks.filter(c=>c.k==='no').length;
+  el.className='verdict '+(bad?'bad':'good');
+  el.textContent=scan.draft.rows.length+' rows. '+m+' match standard rounding.'+(bad?' '+bad+' need checking against the paper; a misread number shows up as a difference.':'');
+}
+function parsePaste(t){
+  const rows=[];let skipped=0;
+  t.split(/\n/).map(l=>l.trim()).filter(Boolean).forEach(l=>{
+    const parts=l.split(/[,\t]/).map(s=>s.trim());
+    const nums=parts.slice(1).map(s=>s===''?null:Number(s));
+    if(!parts[0]||nums.length<2||!Number.isInteger(nums[0])||!Number.isInteger(nums[1])){skipped++;return;}
+    rows.push({n:rows.length+1,name:parts[0],c:nums[0],a:nums[1],sp:nums[2]??null,cp:nums[3]??null});
+  });
+  return{rows:cleanRows(rows),skipped};
+}
+function addFiles(list){
+  scan.err='';
+  const room=Math.max(0,maxImgs-scan.files.length);
+  const picked=Array.from(list).slice(0,room);
+  if(list.length>room)scan.err='Only '+maxImgs+' photos fit in one read. Extra photos were left out.';
+  picked.forEach(f=>scan.files.push({file:f,url:URL.createObjectURL(f),rot:0}));
+  renderScan();
+}
+async function runScan(){
+  if(!scan.files.length||scan.busy)return;
+  if(!sampleFn)return runGemini();
+  scan.busy=true;scan.err='';scan.ctl=new AbortController();renderScan();
+  try{
+    const blobs=await Promise.all(scan.files.map(f=>rotateBlob(f.file,f.rot)));
+    const data=await sampleFn.json(PROMPT,{images:blobs,signal:scan.ctl.signal,modelTier:'default'});
+    const rows=cleanRows(data&&data.rows);
+    if(!rows.length)throw{code:'invalid_json'};
+    scan.draft={rows,period:typeof data.period==='string'?data.period.slice(0,60):''};
+  }catch(e){scan.err=errCopy(e);}
+  finally{scan.busy=false;scan.ctl=null;renderScan();}
+}
+function clearFiles(){scan.files.forEach(f=>URL.revokeObjectURL(f.url));scan.files=[];}
+function refreshMonths(){renderMonthCards();paintStudents();}
+
+// ---------- Gemini photo reading (used when the page is not inside Claude) ----------
+const GKEY='attendance-gemini-key-v1',GMODEL='attendance-gemini-model-v1';
+const GBASE='https://generativelanguage.googleapis.com/v1beta/';
+const gem={key:'',model:'',models:[],busy:false,msg:''};
+function lsGet(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
+function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(e){}}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const GPROMPT='This image is ONE PAGE of a printed college table titled "Cumulative Attendance Report". It may be photographed at an angle, and later pages may have no header row. '
+ +'Columns from left to right: S.No, Register No, Name of the Student, then for the month: Conducted Hours, Attended Hours, Attn %, then a second Attn % column (cumulative, a different date range), then a handwritten signature. '
+ +'Read EVERY student row visible on this page, top to bottom, and do not skip, merge or invent rows. '
+ +'Copy each number exactly as printed. Do NOT calculate, check or correct anything. '
+ +'Reply with only JSON of this shape: {"period":"text of the month date range if visible, else empty","rows":[{"n":1,"name":"AARTHI C","c":64,"a":32,"sp":50,"cp":47}]} '
+ +'where n = S.No, c = Conducted Hours, a = Attended Hours, sp = the first Attn % (month), cp = the second Attn % (cumulative). '
+ +'Use null for any value you cannot read with confidence. Keep the name exactly as printed, including a date of birth in brackets. Leave out register numbers and signatures.';
+function pickModel(ids){
+  const ok=ids.filter(id=>/^gemini-\d+(\.\d+)?-flash(-lite)?$/.test(id));
+  const ver=id=>parseFloat(id.match(/^gemini-(\d+(?:\.\d+)?)/)[1]);
+  ok.sort((x,y)=>ver(y)-ver(x)||(/lite/.test(x)-/lite/.test(y)));
+  return ok[0]||ids.find(id=>/flash/.test(id)&&!/(tts|live|image|embed|audio|native|thinking|computer|robotics)/.test(id))||ids[0]||'';
+}
+function gemErr(e){
+  if(e&&e.name==='AbortError')return '';
+  if(e&&e.http){
+    const m=(e.msg||'').toLowerCase();
+    if(e.http===400&&m.includes('api key'))return 'Gemini says this key is not valid. Copy the whole key again.';
+    if(e.http===400)return 'Gemini could not use this request: '+(e.msg||'bad request').slice(0,140);
+    if(e.http===401||e.http===403)return 'Gemini refused this key or model. Check the key, or pick another model.';
+    if(e.http===404)return 'That model was not found. Press Refresh models and pick another.';
+    if(e.http===429)return 'The free limit is used up for now. Wait a minute and try again, or try tomorrow.';
+    if(e.http>=500)return 'Gemini is busy. Try again in a minute.';
+    return 'Gemini returned error '+e.http+'.';
+  }
+  if(e&&e.empty)return 'Gemini returned nothing'+(e.reason?' ('+e.reason+')':'')+'. Try a clearer photo.';
+  if(e&&e.bad)return 'The reply could not be read as a table. Try again, or use a sharper photo.';
+  return 'Could not reach Gemini. Check your internet connection.';
+}
+async function gemFetch(path,init){
+  const headers={'x-goog-api-key':gem.key};
+  if(init&&init.body)headers['content-type']='application/json';
+  const res=await fetch(GBASE+path,Object.assign({},init,{headers}));
+  if(!res.ok){let msg='';try{msg=(await res.json()).error.message||'';}catch(e){}throw{http:res.status,msg};}
+  return res.json();
+}
+async function gemLoadModels(){
+  gem.busy=true;gem.msg='Checking the key…';renderScan();
+  try{
+    const j=await gemFetch('models?pageSize=200',{method:'GET'});
+    const ids=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>String(m.name).replace(/^models\//,''));
+    gem.models=ids;
+    if(!ids.includes(gem.model)){gem.model=pickModel(ids);lsSet(GMODEL,gem.model);}
+    scan.err=gem.model?'':'No usable model was listed for this key.';
+  }catch(e){
+    if(e&&(e.http===400||e.http===401||e.http===403)){gem.key='';gem.model='';lsSet(GKEY,'');lsSet(GMODEL,'');}
+    scan.err=gemErr(e);
+  }finally{gem.busy=false;gem.msg='';renderScan();}
+}
+function gemSaveKey(){
+  const v=(($('gem-key')||{}).value||'').trim();
+  if(!/^[A-Za-z0-9_\-]{20,}$/.test(v)){scan.err='That does not look like a key. Copy the whole key from Google AI Studio, with no spaces.';renderScan();return;}
+  gem.key=v;lsSet(GKEY,v);scan.err='';gemLoadModels();
+}
+function gemPrivacy(){return '<p class="hint">Photos go to Google\'s Gemini service. On the free plan Google may use them to improve its products, so crop out the names first if that matters to you.</p>';}
+function geminiSetupHTML(){
+  if(!gem.key){
+    return '<div class="verdict neutral" style="font-weight:400"><b>One-time setup: a free Gemini key (about a minute)</b>'
+      +'<ol class="findings" style="margin-top:8px"><li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent)">Google AI Studio</a> and sign in with a Google account.</li>'
+      +'<li>Press <b>Create API key</b> and copy it.</li><li>Paste it below. It stays in this browser only.</li></ol></div>'
+      +'<div class="fields"><div class="field full"><label for="gem-key">Gemini API key</label><input id="gem-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the key here"></div></div>'
+      +'<div class="actions"><button type="button" class="btn primary" data-act="savekey"'+(gem.busy?' disabled':'')+'>Save key</button>'+(gem.msg?'<span class="muted">'+esc(gem.msg)+'</span>':'')+'</div>'+gemPrivacy();
+  }
+  const opts=gem.models.length?gem.models:(gem.model?[gem.model]:[]);
+  return '<div class="fields"><div class="field full"><label for="gem-model">Gemini model (key ending '+esc(gem.key.slice(-4))+')</label>'
+    +'<select id="gem-model">'+(opts.length?opts.map(m=>'<option value="'+esc(m)+'"'+(m===gem.model?' selected':'')+'>'+esc(m)+'</option>').join(''):'<option value="">Press Refresh models</option>')+'</select></div></div>'
+    +'<div class="actions"><button type="button" class="btn" data-act="testkey"'+(gem.busy?' disabled':'')+'>Refresh models</button><button type="button" class="btn" data-act="rmkey">Remove key</button>'+(gem.msg?'<span class="muted">'+esc(gem.msg)+'</span>':'')+'</div>'+gemPrivacy();
+}
+function photosBlock(provider){
+  let h='<p class="hint">One photo per page of the sheet, up to '+maxImgs+'. Rotate each one so the table reads upright. The photos are sent to '+provider+(provider==='Gemini'?' (Google)':'')+' when you press Read the sheet.</p>'
+   +'<div class="actions"><label class="btn primary picker" for="scan-files">Choose photos</label><input class="fileinput" id="scan-files" type="file" accept="'+imgTypes+'" multiple></div>';
+  if(scan.files.length){
+    h+='<div class="thumbs">'+scan.files.map((f,i)=>'<div class="thumb"><div class="pic"><img alt="Page '+(i+1)+'" src="'+f.url+'" style="transform:rotate('+f.rot+'deg)"></div>'
+     +'<div class="tb"><button type="button" data-act="rot" data-i="'+i+'" data-d="-90" aria-label="Rotate page '+(i+1)+' left">↺</button><button type="button" data-act="rot" data-i="'+i+'" data-d="90" aria-label="Rotate page '+(i+1)+' right">↻</button><button type="button" data-act="rmf" data-i="'+i+'" aria-label="Remove page '+(i+1)+'">✕</button></div></div>').join('')+'</div>';
+  }
+  h+='<div class="actions"><button type="button" class="btn primary" data-act="go" '+(scan.files.length&&!scan.busy?'':'disabled')+'>Read the sheet</button>'
+   +(scan.busy?'<button type="button" class="btn" data-act="stop">Stop</button><span class="muted">'+esc(scan.progress||'Reading the table. This can take a minute.')+'</span>':'')+'</div>';
+  return h;
+}
+async function prepJpegB64(file,deg,maxSide){
+  const d=((deg%360)+360)%360;
+  let bmp;
+  try{bmp=await createImageBitmap(file,{imageOrientation:'from-image'});}catch(e){bmp=await createImageBitmap(file);}
+  const swap=d===90||d===270;
+  const w=swap?bmp.height:bmp.width,h=swap?bmp.width:bmp.height;
+  const sc=Math.min(1,maxSide/Math.max(w,h));
+  const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(w*sc));cv.height=Math.max(1,Math.round(h*sc));
+  const x=cv.getContext('2d');
+  x.translate(cv.width/2,cv.height/2);x.rotate(d*Math.PI/180);x.scale(sc,sc);
+  x.drawImage(bmp,-bmp.width/2,-bmp.height/2);
+  const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.9));
+  if(!blob)throw{bad:true};
+  const buf=new Uint8Array(await blob.arrayBuffer());let s='';
+  for(let i=0;i<buf.length;i+=0x8000)s+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
+  return btoa(s);
+}
+function parseJsonLoose(t){
+  try{return JSON.parse(t);}catch(e){}
+  const a=t.indexOf('{'),b=t.lastIndexOf('}');
+  if(a>=0&&b>a){try{return JSON.parse(t.slice(a,b+1));}catch(e){}}
+  throw{bad:true};
+}
+// join the pages, drop repeated S.No, and report anything that looks wrong
+function mergePages(all,warn){
+  const seen=new Map(),extra=[];
+  all.forEach(r=>{
+    if(r.n===null){extra.push(r);return;}
+    if(!seen.has(r.n))seen.set(r.n,r);
+    else{const o=seen.get(r.n);if(o.name!==r.name||o.c!==r.c||o.a!==r.a)warn.push('S.No '+r.n+' appears twice with different numbers. The first was kept.');}
+  });
+  const rows=[...seen.values()].sort((x,y)=>x.n-y.n);
+  const top=rows.length?rows[rows.length-1].n:0;
+  const missing=[];for(let k=1;k<=top;k++)if(!seen.has(k))missing.push(k);
+  if(missing.length)warn.push('S.No '+missing.slice(0,14).join(', ')+(missing.length>14?' and more':'')+' not found. A page may be left out or a row skipped.');
+  let nxt=top;extra.forEach(r=>{r.n=++nxt;rows.push(r);});
+  if(extra.length)warn.push(extra.length+' row'+(extra.length===1?' had':'s had')+' no S.No and were added at the end.');
+  const freq=new Map();rows.forEach(r=>{if(r.c>0)freq.set(r.c,(freq.get(r.c)||0)+1);});
+  let base=0,best=0;freq.forEach((v,k)=>{if(v>best){best=v;base=k;}});
+  const odd=rows.filter(r=>r.c!==null&&r.c>0&&r.c!==base);
+  if(odd.length&&odd.length<=6)warn.push('Different hours base from most rows ('+base+'): '+odd.map(r=>r.name+' '+r.c).join(', ')+'. Check these against the paper.');
+  return rows;
+}
+async function runGemini(){
+  if(scan.busy||!scan.files.length||!gem.key||!gem.model)return;
+  scan.busy=true;scan.err='';scan.progress='';scan.ctl=new AbortController();renderScan();
+  const all=[],warn=[];let period='',lastErr='',stopped=false;
+  try{
+    for(let i=0;i<scan.files.length&&!stopped;i++){
+      const f=scan.files[i],ck=f.file.name+'|'+f.file.size+'|'+f.rot+'|'+gem.model;
+      scan.progress='Reading page '+(i+1)+' of '+scan.files.length+'…';renderScan();
+      try{
+        let hit=scan.cache[ck];
+        if(!hit){
+          const b64=await prepJpegB64(f.file,f.rot,2200);
+          const j=await gemFetch('models/'+encodeURIComponent(gem.model)+':generateContent',{method:'POST',signal:scan.ctl.signal,
+            body:JSON.stringify({contents:[{parts:[{text:GPROMPT},{inline_data:{mime_type:'image/jpeg',data:b64}}]}],generationConfig:{temperature:0,responseMimeType:'application/json'}})});
+          const cand=j.candidates&&j.candidates[0];
+          const text=((cand&&cand.content&&cand.content.parts)||[]).map(x=>x.text||'').join('');
+          if(!text.trim())throw{empty:true,reason:(j.promptFeedback&&j.promptFeedback.blockReason)||(cand&&cand.finishReason)||''};
+          let d=parseJsonLoose(text);if(Array.isArray(d))d={rows:d};
+          const rows=cleanRows(d&&d.rows,true);
+          if(!rows.length)throw{bad:true};
+          hit={rows,per:typeof d.period==='string'?d.period.slice(0,60):''};
+          scan.cache[ck]=hit;
+          if(i<scan.files.length-1)await sleep(1200);
+        }
+        hit.rows.forEach(r=>all.push(Object.assign({},r)));
+        if(hit.per&&!period)period=hit.per;
+      }catch(e){
+        if(e&&e.name==='AbortError')throw e;
+        lastErr=gemErr(e);warn.push('Page '+(i+1)+' could not be read. '+lastErr);
+        if(e&&e.http&&e.http!==500&&e.http!==503){stopped=true;if(i<scan.files.length-1)warn.push('The remaining pages were not read.');}
+      }
+    }
+    if(!all.length)scan.err=lastErr||'Nothing could be read.';
+    else scan.draft={rows:mergePages(all,warn),period,warn};
+  }catch(e){scan.err=gemErr(e);}
+  finally{scan.busy=false;scan.ctl=null;scan.progress='';renderScan();}
+}
+
+function initMonths(){
+  months=loadMonths();
+  buildMonthsStatic();renderScan();refreshMonths();
+  const v=$('view-months');
+  v.addEventListener('click',e=>{
+    const b=e.target.closest('[data-act],[data-mact]');if(!b||b.disabled)return;
+    const a=b.dataset.act,i=Number(b.dataset.i);
+    if(a==='mode'){scan.mode=b.dataset.m;scan.err='';renderScan();}
+    else if(a==='rot'){scan.files[i].rot=(scan.files[i].rot+Number(b.dataset.d)+360)%360;renderScan();}
+    else if(a==='rmf'){URL.revokeObjectURL(scan.files[i].url);scan.files.splice(i,1);renderScan();}
+    else if(a==='savekey')gemSaveKey();
+    else if(a==='testkey')gemLoadModels();
+    else if(a==='rmkey'){gem.key='';gem.model='';gem.models=[];lsSet(GKEY,'');lsSet(GMODEL,'');scan.err='';renderScan();}
+    else if(a==='go')runScan();
+    else if(a==='stop')scan.ctl&&scan.ctl.abort();
+    else if(a==='paste-use'){
+      const r=parsePaste(scan.paste);
+      if(!r.rows.length){scan.err='No usable lines found. Each line needs a name, conducted hours and attended hours.';}
+      else{scan.err='';scan.draft={rows:r.rows,period:r.skipped?r.skipped+' line'+(r.skipped===1?'':'s')+' could not be read and were skipped.':''};}
+      renderScan();
+    }
+    else if(a==='rmrow'){scan.draft.rows.splice(i,1);renderScan();}
+    else if(a==='discard'){scan.draft=null;scan.label='';renderScan();}
+    else if(a==='save'){
+      const rows=scan.draft.rows.filter(r=>r.name.trim());
+      if(!rows.length)return;
+      const label=(scan.label.trim()||'Month '+(months.length+1)).slice(0,40);
+      months.push({id:Date.now().toString(36),label,source:scan.mode==='photos'?'read from photos':'pasted',rows});
+      saveMonths();clearFiles();scan.draft=null;scan.label='';scan.paste='';scan.err='';
+      renderScan();refreshMonths();
+    }
+    else if(b.dataset.mact==='rm'){
+      if(mconfirm===b.dataset.id){months=months.filter(m=>m.id!==b.dataset.id);mconfirm=null;saveMonths();refreshMonths();}
+      else{mconfirm=b.dataset.id;renderMonthCards();}
+    }
+    else if(b.dataset.mact==='open'){
+      const s=aggregate().find(x=>x.key===b.dataset.key);if(!s||!s.C)return;
+      $('att').value=s.A;$('con').value=s.C;$('sheetpct').value='';$('student').value='';
+      $('example-tag').hidden=true;
+      location.hash='calculator';renderCalc();
+    }
+  });
+  v.addEventListener('input',e=>{
+    const t=e.target;
+    if(t.id==='scan-label')scan.label=t.value;
+    else if(t.id==='scan-paste')scan.paste=t.value;
+    else if(t.id==='mq')paintStudents();
+    else if(t.dataset&&t.dataset.f&&scan.draft){
+      const i=Number(t.dataset.i),f=t.dataset.f;
+      scan.draft.rows[i][f]=f==='name'?t.value:(t.value.trim()===''?null:num0(Number(t.value)));
+      paintDraftCheck(i);paintDraftSummary();
+    }
+  });
+  v.addEventListener('change',e=>{
+    if(e.target.id==='scan-files')addFiles(e.target.files);
+    else if(e.target.id==='msort')paintStudents();
+    else if(e.target.id==='gem-model'){gem.model=e.target.value;lsSet(GMODEL,gem.model);}
+  });
+  (async()=>{
+    try{
+      const s=await (window.claude&&window.claude.use?window.claude.use('sample'):null);
+      if(s){const lim=await s.limits().catch(()=>null);
+        if(lim&&lim.images){sampleFn=s;maxImgs=lim.images.maxCount;imgTypes=lim.images.mediaTypes.join(',');}}
+    }catch(e){}
+    if(!sampleFn){
+      maxImgs=6;imgTypes='image/jpeg,image/png,image/webp';
+      gem.key=lsGet(GKEY);gem.model=lsGet(GMODEL);
+      if(gem.model)gem.models=[gem.model];
+      sampleReady=true;renderScan();
+      if(gem.key&&!gem.model)gemLoadModels();
+      return;
+    }
+    sampleReady=true;renderScan();
+  })();
+}
+
+// ---------- routing + wiring ----------
+function route(){
+  const v=location.hash==='#audit'?'audit':location.hash==='#months'?'months':'calculator';
+  $('view-calculator').hidden=v!=='calculator';
+  $('view-months').hidden=v!=='months';
+  $('view-audit').hidden=v!=='audit';
+  ['calculator','months','audit'].forEach(t=>{
+    const a=$('tab-'+t);
+    if(t===v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
+  });
+  if(v==='audit')renderAudit();
+  if(v==='months')refreshMonths();
+}
+function init(){
+  buildPicker();
+  $('student').addEventListener('change',e=>{if(e.target.value)loadStudent(Number(e.target.value));});
+  ['att','con'].forEach(id=>$(id).addEventListener('input',()=>{$('student').value='';$('example-tag').hidden=true;}));
+  ['att','con','eatt','econ','hpd','tgt','sheetpct'].forEach(id=>$(id).addEventListener('input',renderCalc));
+  $('cum').addEventListener('change',()=>{
+    document.querySelectorAll('[data-cum]').forEach(e=>e.hidden=!$('cum').checked);
+    const n=Number($('student').value);
+    if(n)loadStudent(n);else renderCalc();
+  });
+  $('j-exact').onclick=()=>{judgeRounded=false;$('j-exact').setAttribute('aria-pressed','true');$('j-round').setAttribute('aria-pressed','false');renderCalc();};
+  $('j-round').onclick=()=>{judgeRounded=true;$('j-round').setAttribute('aria-pressed','true');$('j-exact').setAttribute('aria-pressed','false');renderCalc();};
+  window.addEventListener('hashchange',route);
+  initMonths();
+  renderCalc();route();
+}
+init();
+
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+
+</body>
+</html>
